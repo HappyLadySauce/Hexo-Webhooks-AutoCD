@@ -8,16 +8,21 @@ import (
 
 type config struct {
 	Webhook struct {
-		Port int    `mapstructure:"port"`
-		Path string `mapstructure:"path"`
+		Port   int    `mapstructure:"port"`
+		Path   string `mapstructure:"path"`
 		Secret string `mapstructure:"secret"`
 	} `mapstructure:"webhook"`
-	
+
 	Scripts struct {
-		Path string `mapstructure:"path"`
-		Push string `mapstructure:"push"`
-		Release string `mapstructure:"release"`
+		Path    string `mapstructure:"path"`
+		Push    string `mapstructure:"push"`
 	} `mapstructure:"scripts"`
+
+	SSL struct {
+		Enabled  bool   `mapstructure:"enabled"`
+		CertFile string `mapstructure:"cert_file"`
+		KeyFile  string `mapstructure:"key_file"`
+	} `mapstructure:"ssl"`
 }
 
 var Config *config
