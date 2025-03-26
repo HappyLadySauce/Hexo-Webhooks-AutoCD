@@ -1,0 +1,8 @@
+webhook:
+    port: 8080
+    path: /webhook
+    secret: your_secret_key
+scripts:
+    scripts_path: ./scripts
+    push: deploy.sh
+    release: release.sh
