@@ -5,6 +5,28 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
+# 停止hexo进程的函数
+stop_hexo() {
+    log "正在停止hexo服务..."
+    sudo systemctl stop hexo
+    # 等待服务完全停止
+    sleep 2
+}
+
+# 启动hexo服务的函数
+start_hexo() {
+    log "正在启动hexo服务..."
+    sudo systemctl start hexo
+    # 等待服务启动
+    sleep 2
+    # 检查服务状态
+    if sudo systemctl is-active hexo >/dev/null 2>&1; then
+        log "hexo服务已成功启动"
+    else
+        log "警告：hexo服务可能未正常启动，请检查服务状态"                                                                                                                                                                   
+    fi
+}
+
 # 工作目录
 BLOG_DIR="/home/hexo/blog"
 POSTS_DIR="/home/hexo/markdown"
@@ -132,6 +154,9 @@ done
 cd "$BLOG_DIR" || exit 1
 log "开始部署博客..."
 
+# 停止hexo服务
+stop_hexo
+
 # 清理缓存
 log "清理 Hexo 缓存..."
 hexo clean
@@ -146,37 +171,9 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# 启动服务器
-log "启动服务器..."
-hexo serve &  # 在后台运行
+# 启动hexo服务
+start_hexo
 
-# 获取hexo serve的PID
-HEXO_PID=$!
-
-# 创建一个函数来处理信号
-cleanup() {
-    log "收到停止信号，正在关闭服务..."
-    kill $HEXO_PID
-    exit 0
-}
-
-# 注册信号处理
-trap cleanup SIGINT SIGTERM
-
-# 持续监控hexo serve的状态
-log "服务器已启动，PID: $HEXO_PID"
-log "正在监控服务器状态..."
-
-while true; do
-    if ! kill -0 $HEXO_PID 2>/dev/null; then
-        log "服务器已停止，正在重启..."
-        hexo serve &
-        HEXO_PID=$!
-        log "服务器已重启，新PID: $HEXO_PID"
-    fi
-    sleep 5
-done
-
-log "启动完成！"
+log "部署完成！"
 exit 0
 
