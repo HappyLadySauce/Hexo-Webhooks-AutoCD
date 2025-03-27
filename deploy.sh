@@ -37,6 +37,8 @@ stop_hexo() {
     else
         log "hexo服务未运行"
     fi
+    # 等待3秒
+    sleep 3
     return 0
 }
 
@@ -192,6 +194,8 @@ done
 # 更新博客
 cd "$BLOG_DIR" || exit 1
 log "开始部署博客..."
+
+sleep 1
 
 # 停止hexo服务
 if ! stop_hexo; then
