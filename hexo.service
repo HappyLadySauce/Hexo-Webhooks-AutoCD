@@ -1,0 +1,14 @@
+[Unit]
+Description=Hexo Blog Server
+After=network.target
+
+[Service]
+Type=simple
+User=hexo
+WorkingDirectory=/home/hexo/blog
+ExecStart=/usr/bin/hexo serve
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
