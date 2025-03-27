@@ -1,2 +1,29 @@
+# 二进制文件
+hexo-webhooks-autocd
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 测试文件
+*.test
+*.tmp
+
+# 配置文件（除了示例配置）
 config.yaml
+*.pem
+
+# 系统文件
+.DS_Store
+.idea/
+.vscode/
+
+# 日志文件
+*.log
+
+# 临时文件
+tmp/
+temp/
+
 cert/*

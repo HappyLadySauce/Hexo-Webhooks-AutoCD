@@ -1,11 +1,11 @@
 webhook:
     port: 8080
-    path: /webhook
+    path: /your_API_path
     secret: your_secret_key
 scripts:
-    scripts_path: .
-    push: test.sh
+    scripts_path: /etc/hexo-webhooks-autocd/scripts
+    push: deploy.sh
 ssl:
     enabled: true
-    cert_file: cert/fullchain.pem
-    key_file: cert/privkey.pem
+    cert_file: /etc/hexo-webhooks-autocd/cert/fullchain.pem
+    key_file: /etc/hexo-webhooks-autocd/cert/privkey.pem
