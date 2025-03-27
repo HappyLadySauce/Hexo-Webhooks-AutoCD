@@ -6,9 +6,12 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -68,29 +71,72 @@ func HandleWebhook(c *gin.Context) {
 	// 根据事件类型进行不同的处理
 	switch eventType {
 	case "push":
-		handlePushEvent(c)
+		handlePushEvent(c, body)
 	default:
 		c.JSON(http.StatusBadRequest, gin.H{"错误": "不支持的事件类型"})
 	}
 }
 
-func handlePushEvent(c *gin.Context) {
-	// 执行脚本
-	executor := scripts.NewExecutor(scripts.ExecutorConfig{
-		ScriptsPath:   config.Config.Scripts.Path,
-		Timeout:       30 * time.Second,
-		MaxConcurrent: 5,
-	})
-	result, err := executor.Execute(config.Config.Scripts.Push, "")
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"错误": err.Error()})
-		return
-	}
-	if result.ExitCode != 0 {
-		c.JSON(http.StatusInternalServerError, gin.H{"错误": result.Output})
+// Git commit
+type HeadCommit struct {
+	ID        string   `json:"id"`
+	Message   string   `json:"message"`
+	Timestamp string   `json:"timestamp"`
+	Added     []string `json:"added"`
+	Removed   []string `json:"removed"`
+	Modified  []string `json:"modified"`
+}
+
+type PushEvent struct {
+	HeadCommit HeadCommit `json:"head_commit"`
+}
+
+func handlePushEvent(c *gin.Context, body []byte) {
+	// 解析 body
+	var pushEvent PushEvent
+	if err := json.Unmarshal(body, &pushEvent); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"错误": "无法解析 push 事件数据"})
 		return
 	}
 
-	// 返回响应
-	c.JSON(http.StatusOK, gin.H{"消息": "脚本执行成功", "结果": result.Output})
+	// 准备环境变量
+	commitEnv := []string{
+		fmt.Sprintf("COMMIT_ID=%s", pushEvent.HeadCommit.ID),
+		fmt.Sprintf("COMMIT_MESSAGE=%s", pushEvent.HeadCommit.Message),
+		fmt.Sprintf("COMMIT_TIMESTAMP=%s", pushEvent.HeadCommit.Timestamp),
+		fmt.Sprintf("COMMIT_ADDED=%s", strings.Join(pushEvent.HeadCommit.Added, ",")),
+		fmt.Sprintf("COMMIT_REMOVED=%s", strings.Join(pushEvent.HeadCommit.Removed, ",")),
+		fmt.Sprintf("COMMIT_MODIFIED=%s", strings.Join(pushEvent.HeadCommit.Modified, ",")),
+	}
+
+	// 创建执行器
+	executor := scripts.NewExecutor(scripts.ExecutorConfig{
+		ScriptsPath:   config.Config.Scripts.Path,
+		Timeout:       5 * time.Minute,
+		MaxConcurrent: 5,
+		DefaultEnv:    commitEnv,
+	})
+
+	// 立即返回成功响应
+	c.JSON(http.StatusOK, gin.H{
+		"消息": "脚本开始执行",
+		"状态": "running",
+	})
+
+	// 异步执行脚本
+	go func() {
+		result, err := executor.Execute(config.Config.Scripts.Push, "")
+		if err != nil {
+			log.Printf("错误：执行脚本失败：%v", err)
+			return
+		}
+		if result.ExitCode != 0 {
+			log.Printf("错误：脚本执行失败：%s", result.Output)
+			if len(result.Logs) > 0 {
+				log.Printf("详细日志：\n%s", strings.Join(result.Logs, "\n"))
+			}
+			return
+		}
+		log.Printf("脚本执行完成，输出：\n%s", result.Output)
+	}()
 }

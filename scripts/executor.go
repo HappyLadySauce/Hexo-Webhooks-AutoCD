@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -89,34 +90,11 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 	cmd.Dir = e.config.ScriptsPath
 
 	// 设置环境变量
-	// 首先添加系统环境变量
 	env := os.Environ()
-
-	// 然后添加配置中的默认环境变量
 	if len(e.config.DefaultEnv) > 0 {
 		env = append(env, e.config.DefaultEnv...)
 	}
-
-	// 设置最终的环境变量
 	cmd.Env = env
-
-	// 如果有payload，将其转换为环境变量
-	if payload != nil {
-		// TODO: 将 payload 转换为环境变量
-		// 例如：GITHUB_EVENT=push, GITHUB_REPO=xxx 等
-	}
-
-	// 记录正在执行的命令
-	e.mu.Lock()
-	e.executions[event] = cmd
-	e.mu.Unlock()
-
-	// 清理函数
-	defer func() {
-		e.mu.Lock()
-		delete(e.executions, event)
-		e.mu.Unlock()
-	}()
 
 	// 创建管道用于实时获取输出
 	stdout, err := cmd.StdoutPipe()
@@ -131,6 +109,18 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 	// 创建多路复用的输出
 	var outputBuffer bytes.Buffer
 	var logs []string
+
+	// 记录正在执行的命令
+	e.mu.Lock()
+	e.executions[event] = cmd
+	e.mu.Unlock()
+
+	// 清理函数
+	defer func() {
+		e.mu.Lock()
+		delete(e.executions, event)
+		e.mu.Unlock()
+	}()
 
 	// 启动命令
 	if err := cmd.Start(); err != nil {
@@ -149,12 +139,13 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 			line, err := reader.ReadString('\n')
 			if err != nil {
 				if err != io.EOF {
-					logs = append(logs, fmt.Sprintf("读取输出错误: %v", err))
+					log.Printf("读取输出错误: %v", err)
 				}
 				break
 			}
 			line = strings.TrimSpace(line)
 			if line != "" {
+				log.Printf("[Script] %s", line)
 				logs = append(logs, line)
 				outputBuffer.WriteString(line + "\n")
 			}
@@ -169,12 +160,13 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 			line, err := reader.ReadString('\n')
 			if err != nil {
 				if err != io.EOF {
-					logs = append(logs, fmt.Sprintf("读取错误输出错误: %v", err))
+					log.Printf("读取错误输出错误: %v", err)
 				}
 				break
 			}
 			line = strings.TrimSpace(line)
 			if line != "" {
+				log.Printf("[Script Error] %s", line)
 				logs = append(logs, "错误: "+line)
 				outputBuffer.WriteString("错误: " + line + "\n")
 			}
@@ -206,7 +198,7 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 	if ctx.Err() == context.DeadlineExceeded {
 		result.Error = "script execution timed out"
 		result.ExitCode = -1
-		logs = append(logs, "脚本执行超时")
+		log.Printf("[Script] 脚本执行超时")
 	}
 
 	return result, nil
