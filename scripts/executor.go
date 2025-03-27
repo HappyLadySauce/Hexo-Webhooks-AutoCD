@@ -139,7 +139,8 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 			line, err := reader.ReadString('\n')
 			if err != nil {
 				if err != io.EOF {
-					log.Printf("读取输出错误: %v", err)
+					// 只在非EOF错误时记录日志
+					log.Printf("错误：读取输出失败：%v", err)
 				}
 				break
 			}
@@ -160,7 +161,8 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 			line, err := reader.ReadString('\n')
 			if err != nil {
 				if err != io.EOF {
-					log.Printf("读取错误输出错误: %v", err)
+					// 只在非EOF错误时记录日志
+					log.Printf("错误：读取错误输出失败：%v", err)
 				}
 				break
 			}
