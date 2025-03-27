@@ -1,11 +1,15 @@
 package scripts
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -13,9 +17,10 @@ import (
 // ExecutionResult 定义脚本执行结果
 // 这个结构体用于存储脚本执行后的各种状态
 type ExecutionResult struct {
-	Output   string `json:"output"`          // 脚本的输出内容
-	ExitCode int    `json:"exit_code"`       // 脚本的退出码，0表示成功，非0表示失败
-	Error    string `json:"error,omitempty"` // 如果执行出错，这里存储错误信息
+	Output   string   `json:"output"`          // 脚本的输出内容
+	ExitCode int      `json:"exit_code"`       // 脚本的退出码，0表示成功，非0表示失败
+	Error    string   `json:"error,omitempty"` // 如果执行出错，这里存储错误信息
+	Logs     []string `json:"logs"`            // 执行日志
 }
 
 // ScriptExecutor 定义脚本执行器接口
@@ -84,7 +89,16 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 	cmd.Dir = e.config.ScriptsPath
 
 	// 设置环境变量
-	cmd.Env = append(os.Environ(), e.config.DefaultEnv...)
+	// 首先添加系统环境变量
+	env := os.Environ()
+
+	// 然后添加配置中的默认环境变量
+	if len(e.config.DefaultEnv) > 0 {
+		env = append(env, e.config.DefaultEnv...)
+	}
+
+	// 设置最终的环境变量
+	cmd.Env = env
 
 	// 如果有payload，将其转换为环境变量
 	if payload != nil {
@@ -104,13 +118,80 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 		e.mu.Unlock()
 	}()
 
-	// 执行命令并捕获输出
-	output, err := cmd.CombinedOutput()
+	// 创建管道用于实时获取输出
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("无法创建输出管道: %v", err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("无法创建错误输出管道: %v", err)
+	}
+
+	// 创建多路复用的输出
+	var outputBuffer bytes.Buffer
+	var logs []string
+
+	// 启动命令
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("启动脚本失败: %v", err)
+	}
+
+	// 创建等待组
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// 处理标准输出
+	go func() {
+		defer wg.Done()
+		reader := bufio.NewReader(stdout)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err != io.EOF {
+					logs = append(logs, fmt.Sprintf("读取输出错误: %v", err))
+				}
+				break
+			}
+			line = strings.TrimSpace(line)
+			if line != "" {
+				logs = append(logs, line)
+				outputBuffer.WriteString(line + "\n")
+			}
+		}
+	}()
+
+	// 处理错误输出
+	go func() {
+		defer wg.Done()
+		reader := bufio.NewReader(stderr)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err != io.EOF {
+					logs = append(logs, fmt.Sprintf("读取错误输出错误: %v", err))
+				}
+				break
+			}
+			line = strings.TrimSpace(line)
+			if line != "" {
+				logs = append(logs, "错误: "+line)
+				outputBuffer.WriteString("错误: " + line + "\n")
+			}
+		}
+	}()
+
+	// 等待命令完成
+	err = cmd.Wait()
+
+	// 等待所有输出处理完成
+	wg.Wait()
 
 	// 准备执行结果
 	result := &ExecutionResult{
-		Output:   string(output),
+		Output:   outputBuffer.String(),
 		ExitCode: 0,
+		Logs:     logs,
 	}
 
 	// 处理执行错误
@@ -125,6 +206,7 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 	if ctx.Err() == context.DeadlineExceeded {
 		result.Error = "script execution timed out"
 		result.ExitCode = -1
+		logs = append(logs, "脚本执行超时")
 	}
 
 	return result, nil
