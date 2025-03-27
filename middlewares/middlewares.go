@@ -9,7 +9,7 @@ import (
 func DenyScan() gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
 		// 如果请求路径不是/webhooks，则返回错误信息和IP地址
-		if c.Request.URL.Path != "/webhooks" {
+		if c.Request.URL.Path != "/webhook" {
 			c.JSON(http.StatusNotFound, gin.H{"message": "请不要扫描我的博客！", "ip": c.ClientIP()})
 			return
 		}

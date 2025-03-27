@@ -131,12 +131,11 @@ func handlePushEvent(c *gin.Context, body []byte) {
 			return
 		}
 		if result.ExitCode != 0 {
-			log.Printf("错误：脚本执行失败：%s", result.Output)
-			if len(result.Logs) > 0 {
-				log.Printf("详细日志：\n%s", strings.Join(result.Logs, "\n"))
+			log.Printf("错误：脚本执行失败，退出码：%d", result.ExitCode)
+			if result.Error != "" {
+				log.Printf("错误信息：%s", result.Error)
 			}
 			return
 		}
-		log.Printf("脚本执行完成，输出：\n%s", result.Output)
 	}()
 }

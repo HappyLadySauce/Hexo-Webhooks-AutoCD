@@ -5,26 +5,62 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
 }
 
+# 配置Git的函数
+setup_git() {
+    log "配置Git环境..."
+    # 配置Git安全目录
+    git config --global --add safe.directory "$POSTS_DIR"
+    # 配置Git用户信息（如果需要）
+    git config --global user.name "HappyLadySauce"
+    git config --global user.email "13452552349@163.com"
+}
+
 # 停止hexo进程的函数
 stop_hexo() {
     log "正在停止hexo服务..."
-    sudo systemctl stop hexo
-    # 等待服务完全停止
-    sleep 2
+    if systemctl is-active hexo >/dev/null 2>&1; then
+        if ! sudo systemctl stop hexo; then
+            log "警告：停止hexo服务失败"
+            return 1
+        fi
+        # 等待服务完全停止
+        local count=0
+        while systemctl is-active hexo >/dev/null 2>&1; do
+            sleep 1
+            count=$((count + 1))
+            if [ $count -ge 10 ]; then
+                log "错误：hexo服务停止超时"
+                return 1
+            fi
+        done
+        log "hexo服务已停止"
+    else
+        log "hexo服务未运行"
+    fi
+    return 0
 }
 
 # 启动hexo服务的函数
 start_hexo() {
     log "正在启动hexo服务..."
-    sudo systemctl start hexo
-    # 等待服务启动
-    sleep 2
-    # 检查服务状态
-    if sudo systemctl is-active hexo >/dev/null 2>&1; then
-        log "hexo服务已成功启动"
-    else
-        log "警告：hexo服务可能未正常启动，请检查服务状态"                                                                                                                                                                   
+    if ! sudo systemctl start hexo; then
+        log "错误：启动hexo服务失败"
+        return 1
     fi
+    
+    # 等待服务启动并检查状态
+    local count=0
+    while ! systemctl is-active hexo >/dev/null 2>&1; do
+        sleep 1
+        count=$((count + 1))
+        if [ $count -ge 10 ]; then
+            log "错误：hexo服务启动超时"
+            return 1
+        fi
+    done
+    
+    log "hexo服务已成功启动"
+    return 0
 }
 
 # 工作目录
@@ -118,6 +154,9 @@ log "修改文件: $COMMIT_MODIFIED"
 cd "$POSTS_DIR" || exit 1
 log "拉取最新文章..."
 
+# 配置Git环境
+setup_git
+
 # 重置所有本地更改
 git reset --hard HEAD
 git clean -fd  # 删除未跟踪的文件和目录
@@ -155,7 +194,9 @@ cd "$BLOG_DIR" || exit 1
 log "开始部署博客..."
 
 # 停止hexo服务
-stop_hexo
+if ! stop_hexo; then
+    log "警告：继续部署，但hexo服务可能未完全停止"
+fi
 
 # 清理缓存
 log "清理 Hexo 缓存..."
@@ -172,7 +213,10 @@ if [ $? -ne 0 ]; then
 fi
 
 # 启动hexo服务
-start_hexo
+if ! start_hexo; then
+    log "错误：部署完成但服务启动失败"
+    exit 1
+fi
 
 log "部署完成！"
 exit 0
