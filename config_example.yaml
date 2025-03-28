@@ -1,11 +1,21 @@
+# 配置文件内容示例：
 webhook:
-    port: 8080
-    path: /your_API_path
-    secret: your_secret_key
+    port: 8080            # 服务监听端口
+    path: /webhook        # Webhook路径
+    secret: your_secret   # GitHub Webhook密钥
+logs:
+    path: /etc/hexo-autocd/logs/webhooks.log
+    level: info           # 日志级别，可选：trace、debug、info、warn、error、fatal、panic
+    format: text          # 日志格式，可选：json、text
+    max_size: 100         # 日志文件最大大小（MB）
+    max_backups: 5        # 日志文件最大备份数
+    max_age: 30           # 日志文件最大保存时间（天）
 scripts:
-    scripts_path: /etc/hexo-webhooks-autocd/scripts
-    push: deploy.sh
+    path: /etc/hexo-autocd/scripts
+    push: deploy.sh       # 部署脚本
+    timeout: 5m           # 脚本执行超时时间
+    max_concurrent: 5     # 最大并发执行数
 ssl:
     enabled: true
-    cert_file: /etc/hexo-webhooks-autocd/cert/fullchain.pem
-    key_file: /etc/hexo-webhooks-autocd/cert/privkey.pem
+    cert_file: /etc/hexo-autocd/cert/fullchain.pem
+    key_file: /etc/hexo-autocd/cert/privkey.pem
