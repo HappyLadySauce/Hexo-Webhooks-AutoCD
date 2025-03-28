@@ -33,7 +33,7 @@
 
 1. 克隆仓库：
 ```bash
-git clone https://github.com/yourusername/Hexo-Webhooks-AutoCD.git
+git clone https://github.com/HappyLadySauce/Hexo-Webhooks-AutoCD.git
 cd Hexo-Webhooks-AutoCD
 ```
 
