@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=hexo
+User=root
 WorkingDirectory=/home/hexo/blog
 ExecStart=/usr/bin/hexo serve
 Restart=on-failure
