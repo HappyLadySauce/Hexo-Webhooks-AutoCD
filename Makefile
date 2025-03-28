@@ -83,16 +83,27 @@ install: build
 		echo "$(YELLOW)! SSL私钥已存在，跳过复制$(RESET)"; \
 	fi
 
-	# 安装systemd服务
+	# 安装hexo systemd服务
+	@if [ -f systemd/hexo.service ]; then \
+		cp systemd/hexo.service $(SYSTEMD_DIR)/ && \
+		systemctl daemon-reload && \
+		echo "$(GREEN)✓ hexo systemd服务安装成功$(RESET)"; \
+	else \
+		echo "$(RED)✗ hexo systemd服务文件不存在$(RESET)"; \
+	fi
+
+	# 安装hexo-autocd systemd服务
 	@if [ -f systemd/hexo-autocd.service ]; then \
 		cp systemd/hexo-autocd.service $(SYSTEMD_DIR)/ && \
 		systemctl daemon-reload && \
-		echo "$(GREEN)✓ systemd服务安装成功$(RESET)"; \
+		echo "$(GREEN)✓ hexo-autocd systemd服务安装成功$(RESET)"; \
 	else \
-		echo "$(RED)✗ systemd服务文件不存在$(RESET)"; \
+		echo "$(RED)✗ hexo-autocd systemd服务文件不存在$(RESET)"; \
 	fi
 	@echo "$(YELLOW)提示: 执行以下命令启用并启动服务:$(RESET)"
 	@echo "  sudo systemctl daemon-reload"
+	@echo "  sudo systemctl enable hexo.service"
+	@echo "  sudo systemctl start hexo.service"
 	@echo "  sudo systemctl enable hexo-autocd.service"
 	@echo "  sudo systemctl start hexo-autocd.service"
 
@@ -108,8 +119,10 @@ install: build
 	@echo "$(BLUE)  后续配置：$(RESET)"
 	@echo "  $(YELLOW)1. 编辑配置文件：$(INSTALL_DIR)/config.yaml$(RESET)"
 	@echo "  $(YELLOW)2. 编辑部署脚本：$(SCRIPTS_DIR)/deploy.sh$(RESET)"
-	@echo "  $(YELLOW)3. 重新加载systemd：sudo systemctl daemon-reload$(RESET)"
-	@echo "  $(YELLOW)4. 启用开机启动并启动服务：systemctl enable --now hexo-autocd.service$(RESET)"
+	@echo "  $(YELLOW)3. 编辑Hexo的路径：vim $(SYSTEMD_DIR)/hexo.service$(RESET)"
+	@echo "  $(YELLOW)4. 重新加载systemd：sudo systemctl daemon-reload$(RESET)"
+	@echo "  $(YELLOW)5. 启用开机启动并启动服务：systemctl enable --now hexo.service$(RESET)"
+	@echo "  $(YELLOW)6. 启用开机启动并启动服务：systemctl enable --now hexo-autocd.service$(RESET)"
 	@echo "$(BLUE)═══════════════════════════════════════════$(RESET)"
 
 uninstall:
@@ -118,6 +131,7 @@ uninstall:
 	@echo "$(CYAN)  - $(BIN_DIR)/$(BINARY_NAME)$(RESET)"
 	@echo "$(CYAN)  - $(INSTALL_DIR)$(RESET)"
 	@echo "$(CYAN)  - $(SYSTEMD_DIR)/hexo-autocd.service$(RESET)"
+	@echo "$(CYAN)  - $(SYSTEMD_DIR)/hexo.service$(RESET)"
 	@read -p "$(RED)确定要继续吗？[y/N] $(RESET)" confirm; \
 	if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
 		systemctl stop hexo-autocd.service 2>/dev/null || true; \
