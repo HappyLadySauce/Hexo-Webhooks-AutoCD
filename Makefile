@@ -11,14 +11,15 @@ RESET=\033[0m
 # 设置Go环境变量
 GOOS=linux
 GOARCH=amd64
-BINARY_NAME=hexo-webhooks-autocd
+BINARY_NAME=hexo-autocd
 
 # 目录定义
-INSTALL_DIR=/etc/hexo-webhooks-autocd
+INSTALL_DIR=/etc/hexo-autocd
 SCRIPTS_DIR=$(INSTALL_DIR)/scripts
 CERT_DIR=$(INSTALL_DIR)/cert
 LOGS_DIR=$(INSTALL_DIR)/logs
 BIN_DIR=/usr/local/bin
+SYSTEMD_DIR=/etc/systemd/system
 
 all: clean build
 
@@ -82,6 +83,19 @@ install: build
 		echo "$(YELLOW)! SSL私钥已存在，跳过复制$(RESET)"; \
 	fi
 
+	# 安装systemd服务
+	@if [ -f systemd/hexo-autocd.service ]; then \
+		cp systemd/hexo-autocd.service $(SYSTEMD_DIR)/ && \
+		systemctl daemon-reload && \
+		echo "$(GREEN)✓ systemd服务安装成功$(RESET)"; \
+	else \
+		echo "$(RED)✗ systemd服务文件不存在$(RESET)"; \
+	fi
+	@echo "$(YELLOW)提示: 执行以下命令启用并启动服务:$(RESET)"
+	@echo "  sudo systemctl daemon-reload"
+	@echo "  sudo systemctl enable hexo-autocd.service"
+	@echo "  sudo systemctl start hexo-autocd.service"
+
 	@echo "\n$(GREEN)✓ 安装完成！$(RESET)"
 	@echo "$(BLUE)═══════════════════════════════════════════$(RESET)"
 	@echo "$(BLUE)  安装路径：$(RESET)"
@@ -90,9 +104,12 @@ install: build
 	@echo "  $(CYAN)- 部署脚本：$(SCRIPTS_DIR)/deploy.sh$(RESET)"
 	@echo "  $(CYAN)- SSL证书：$(CERT_DIR)/fullchain.pem, $(CERT_DIR)/privkey.pem$(RESET)"
 	@echo "  $(CYAN)- 日志目录：$(LOGS_DIR)$(RESET)"
+	@echo "  $(CYAN)- 服务文件：$(SYSTEMD_DIR)/hexo-autocd.service$(RESET)"
 	@echo "$(BLUE)  后续配置：$(RESET)"
 	@echo "  $(YELLOW)1. 编辑配置文件：$(INSTALL_DIR)/config.yaml$(RESET)"
 	@echo "  $(YELLOW)2. 编辑部署脚本：$(SCRIPTS_DIR)/deploy.sh$(RESET)"
+	@echo "  $(YELLOW)3. 重新加载systemd：sudo systemctl daemon-reload$(RESET)"
+	@echo "  $(YELLOW)4. 启用开机启动并启动服务：systemctl enable --now hexo-autocd.service$(RESET)"
 	@echo "$(BLUE)═══════════════════════════════════════════$(RESET)"
 
 uninstall:
@@ -100,8 +117,13 @@ uninstall:
 	@echo "$(YELLOW)! 警告：这将删除以下文件和目录：$(RESET)"
 	@echo "$(CYAN)  - $(BIN_DIR)/$(BINARY_NAME)$(RESET)"
 	@echo "$(CYAN)  - $(INSTALL_DIR)$(RESET)"
+	@echo "$(CYAN)  - $(SYSTEMD_DIR)/hexo-autocd.service$(RESET)"
 	@read -p "$(RED)确定要继续吗？[y/N] $(RESET)" confirm; \
 	if [ "$$confirm" = "y" ] || [ "$$confirm" = "Y" ]; then \
+		systemctl stop hexo-autocd.service 2>/dev/null || true; \
+		systemctl disable hexo-autocd.service 2>/dev/null || true; \
+		rm -f $(SYSTEMD_DIR)/hexo-autocd.service; \
+		systemctl daemon-reload; \
 		rm -f $(BIN_DIR)/$(BINARY_NAME); \
 		rm -rf $(INSTALL_DIR); \
 		echo "$(GREEN)✓ 卸载完成$(RESET)"; \

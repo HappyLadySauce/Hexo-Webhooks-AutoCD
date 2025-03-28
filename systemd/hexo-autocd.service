@@ -1,0 +1,14 @@
+[Unit]
+Description=Hexo AutoCD Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/etc/hexo-autocd
+ExecStart=/usr/local/bin/hexo-autocd
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target 
