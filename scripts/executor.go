@@ -1,18 +1,20 @@
 package scripts
 
 import (
+	"Hexo-AutoCD/logger"
 	"bufio"
 	"bytes"
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sirupsen/logrus"
 )
 
 // ExecutionResult 定义脚本执行结果
@@ -75,6 +77,13 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 		return nil, fmt.Errorf("脚本不存在: %s", event)
 	}
 
+	scriptLogger := logger.WithFields(logrus.Fields{
+		"脚本": event,
+		"路径": scriptPath,
+	})
+
+	scriptLogger.Info("准备执行脚本")
+
 	// 获取执行许可
 	e.semaphore <- struct{}{}        // 占用一个并发槽
 	defer func() { <-e.semaphore }() // 释放并发槽
@@ -122,8 +131,13 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 		e.mu.Unlock()
 	}()
 
+	// 记录脚本开始执行的时间
+	startTime := time.Now()
+	scriptLogger.WithField("开始时间", startTime.Format("2006-01-02 15:04:05")).Info("开始执行脚本")
+
 	// 启动命令
 	if err := cmd.Start(); err != nil {
+		scriptLogger.WithError(err).Error("启动脚本失败")
 		return nil, fmt.Errorf("启动脚本失败: %v", err)
 	}
 
@@ -140,13 +154,14 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 			if err != nil {
 				if err != io.EOF {
 					// 只在非EOF错误时记录日志
-					log.Printf("错误：读取输出失败：%v", err)
+					scriptLogger.WithError(err).Error("读取输出失败")
 				}
 				break
 			}
 			line = strings.TrimSpace(line)
 			if line != "" {
-				log.Printf("[Script] %s", line)
+				// 直接输出脚本内容，不添加额外标记
+				logger.Debug(line)
 				logs = append(logs, line)
 				outputBuffer.WriteString(line + "\n")
 			}
@@ -162,15 +177,29 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 			if err != nil {
 				if err != io.EOF {
 					// 只在非EOF错误时记录日志
-					log.Printf("错误：读取错误输出失败：%v", err)
+					scriptLogger.WithError(err).Error("读取错误输出失败")
 				}
 				break
 			}
 			line = strings.TrimSpace(line)
 			if line != "" {
-				log.Printf("[Script Error] %s", line)
-				logs = append(logs, "错误: "+line)
-				outputBuffer.WriteString("错误: " + line + "\n")
+				// 判断是否为明确的错误信息
+				isError := strings.Contains(line, "error:") ||
+					strings.Contains(line, "fatal:") ||
+					strings.Contains(line, "错误：") ||
+					strings.Contains(line, "failed") ||
+					strings.Contains(line, "失败")
+
+				if isError {
+					// 明确的错误信息使用Warn级别
+					logger.Warn(line)
+				} else {
+					// 其他所有输出使用Debug级别，包括git的正常输出
+					logger.Debug(line)
+				}
+
+				logs = append(logs, line)
+				outputBuffer.WriteString(line + "\n")
 			}
 		}
 	}()
@@ -180,6 +209,9 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 
 	// 等待所有输出处理完成
 	wg.Wait()
+
+	// 执行结束时间
+	endTime := time.Now()
 
 	// 准备执行结果
 	result := &ExecutionResult{
@@ -193,14 +225,26 @@ func (e *DefaultExecutor) Execute(event string, payload interface{}) (*Execution
 		result.Error = err.Error()
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			result.ExitCode = exitErr.ExitCode()
+			scriptLogger.WithFields(logrus.Fields{
+				"退出码":  result.ExitCode,
+				"结束时间": endTime.Format("2006-01-02 15:04:05"),
+				"执行时长": endTime.Sub(startTime).String(),
+			}).Warn("脚本执行返回非零退出码")
+		} else {
+			scriptLogger.WithError(err).Error("脚本执行遇到错误")
 		}
+	} else {
+		scriptLogger.WithFields(logrus.Fields{
+			"结束时间": endTime.Format("2006-01-02 15:04:05"),
+			"执行时长": endTime.Sub(startTime).String(),
+		}).Info("脚本执行成功")
 	}
 
 	// 检查是否超时
 	if ctx.Err() == context.DeadlineExceeded {
 		result.Error = "script execution timed out"
 		result.ExitCode = -1
-		log.Printf("[Script] 脚本执行超时")
+		scriptLogger.Error("脚本执行超时")
 	}
 
 	return result, nil
@@ -216,6 +260,11 @@ func (e *DefaultExecutor) Stop(event string) error {
 		return fmt.Errorf("no running script found for event: %s", event)
 	}
 
+	logger.WithFields(logrus.Fields{
+		"脚本": event,
+		"操作": "强制停止",
+	}).Info("停止脚本执行")
+
 	return cmd.Process.Kill()
 }
 
@@ -224,8 +273,17 @@ func (e *DefaultExecutor) StopAll() {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	for _, cmd := range e.executions {
+	count := len(e.executions)
+	if count == 0 {
+		logger.Debug("没有正在运行的脚本需要停止")
+		return
+	}
+
+	logger.WithField("脚本数量", count).Info("正在停止所有正在执行的脚本")
+
+	for event, cmd := range e.executions {
 		if cmd.Process != nil {
+			logger.WithField("脚本", event).Debug("停止脚本执行")
 			cmd.Process.Kill()
 		}
 	}

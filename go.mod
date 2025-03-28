@@ -2,9 +2,14 @@ module Hexo-AutoCD
 
 go 1.23.6
 
-require github.com/gin-gonic/gin v1.10.0
+require (
+	github.com/gin-gonic/gin v1.10.0
+	github.com/natefinch/lumberjack v2.0.0+incompatible
+	github.com/sirupsen/logrus v1.9.3
+)
 
 require (
+	github.com/BurntSushi/toml v1.5.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
@@ -15,6 +20,8 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
 require (
