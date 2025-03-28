@@ -95,8 +95,9 @@ process_file() {
     fi
     
     # 生成随机封面URL
-    local cover_url="https://lsky.happyladysauce.cn/i/2025/03/21/1/1-C++.webp"
-    
+    cover_base_url="https://lsky.happyladysauce.cn/i/1/"
+    cover_url="$cover_base_url$(($RANDOM % 10)).webp"
+
     # 创建临时文件
     local temp_file=$(mktemp)
     
