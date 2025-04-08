@@ -86,17 +86,17 @@ process_file() {
     
     # 获取标签（从文件名中提取）
     local tags=""
-    if [[ "$filename" == *"&"* ]]; then
-        # 提取&后面的部分（不包括.md）
-        local tag_part="${filename#*&}"
+    if [[ "$filename" == *"_"* ]]; then
+        # 提取_后面的部分（不包括.md）
+        local tag_part="${filename#*_}"
         tag_part="${tag_part%.md}"
-        # 将&分隔的标签转换为yaml格式
-        tags=$(echo "$tag_part" | tr '&' '\n' | sed 's/^/- /')
+        # 将_分隔的标签转换为yaml格式
+        tags=$(echo "$tag_part" | tr '_' '\n' | sed 's/^/- /')
     fi
     
     # 生成随机封面URL
     cover_base_url="https://lsky.happyladysauce.cn/i/1/"
-    cover_url="$cover_base_url$(($RANDOM % 10)).webp"
+    cover_url="$cover_base_url$(($RANDOM % 9)).webp"
 
     # 创建临时文件
     local temp_file=$(mktemp)
@@ -104,7 +104,7 @@ process_file() {
     # 先写入新的front-matter
     {
         echo "---"
-        echo "title: ${filename%%&*}"  # 使用&之前的部分作为标题
+        echo "title: ${filename%%_*}"  # 使用_之前的部分作为标题
         echo "date: $(date '+%Y-%m-%d %H:%M:%S')"
         echo "categories:"
         if [ -n "$categories" ]; then
@@ -211,6 +211,12 @@ hexo clean
 log "生成静态文件..."
 hexo generate
 
+# 拷贝百度SEO文件
+cp /home/hexo/blog/baidu_verify_codeva-XnTSBrrkqX.html /home/hexo/blog/public
+
+# 拷贝图片到public
+cp /home/hexo/blog/source/img/* /home/hexo/blog/public/img/
+
 # 检查生成是否成功
 if [ $? -ne 0 ]; then
     log "错误：生成静态文件失败"
@@ -222,6 +228,9 @@ if ! start_hexo; then
     log "错误：部署完成但服务启动失败"
     exit 1
 fi
+
+# 部署hexo
+hexo d
 
 log "部署完成！"
 exit 0

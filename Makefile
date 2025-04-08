@@ -53,34 +53,23 @@ install: build
 		echo "$(RED)✗ 程序安装失败$(RESET)"
 
 	# 复制配置文件
-	@if [ ! -f $(INSTALL_DIR)/config.yaml ]; then \
-		cp config.yaml $(INSTALL_DIR)/ && echo "$(GREEN)✓ 配置文件复制成功$(RESET)"; \
-	else \
-		echo "$(YELLOW)! 配置文件已存在，跳过复制$(RESET)"; \
-	fi
+	@cp config.yaml $(INSTALL_DIR)/ && \
+		echo "$(GREEN)✓ 配置文件复制成功$(RESET)"
 
 	# 复制部署脚本
-	@if [ ! -f $(SCRIPTS_DIR)/deploy.sh ]; then \
-		cp scripts/deploy.sh $(SCRIPTS_DIR)/ && \
+	@cp scripts/deploy.sh $(SCRIPTS_DIR)/ && \
 		chmod +x $(SCRIPTS_DIR)/deploy.sh && \
-		echo "$(GREEN)✓ 部署脚本复制成功$(RESET)"; \
-	else \
-		echo "$(YELLOW)! 部署脚本已存在，跳过复制$(RESET)"; \
-	fi
+		echo "$(GREEN)✓ 部署脚本复制成功$(RESET)"
 
 	# 复制SSL证书
-	@if [ ! -f $(CERT_DIR)/fullchain.pem ] && [ -f cert/fullchain.pem ]; then \
+	@if [ -f cert/fullchain.pem ]; then \
 		cp cert/fullchain.pem $(CERT_DIR)/ && \
 		echo "$(GREEN)✓ SSL证书复制成功$(RESET)"; \
-	elif [ -f $(CERT_DIR)/fullchain.pem ]; then \
-		echo "$(YELLOW)! SSL证书已存在，跳过复制$(RESET)"; \
 	fi
 
-	@if [ ! -f $(CERT_DIR)/privkey.pem ] && [ -f cert/privkey.pem ]; then \
+	@if [ -f cert/privkey.pem ]; then \
 		cp cert/privkey.pem $(CERT_DIR)/ && \
 		echo "$(GREEN)✓ SSL私钥复制成功$(RESET)"; \
-	elif [ -f $(CERT_DIR)/privkey.pem ]; then \
-		echo "$(YELLOW)! SSL私钥已存在，跳过复制$(RESET)"; \
 	fi
 
 	# 安装hexo systemd服务
