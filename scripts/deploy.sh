@@ -214,9 +214,6 @@ hexo generate
 # 拷贝百度SEO文件
 cp /home/hexo/blog/baidu_verify_codeva-XnTSBrrkqX.html /home/hexo/blog/public
 
-# 拷贝图片到public
-cp /home/hexo/blog/source/img/* /home/hexo/blog/public/img/
-
 # 检查生成是否成功
 if [ $? -ne 0 ]; then
     log "错误：生成静态文件失败"
