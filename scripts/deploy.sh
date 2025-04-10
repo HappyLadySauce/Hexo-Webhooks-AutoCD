@@ -146,6 +146,12 @@ process_file() {
     local rel_path="${src_file#$POSTS_DIR/}"  # 获取相对路径
     local dir_path=$(dirname "$rel_path")
     
+    # 检查文件是否为Markdown文件
+    if [[ "$src_file" != *.md ]]; then
+        log "跳过非Markdown文件: $rel_path"
+        return 0
+    fi
+    
     # 检查文件是否在根目录（非子目录中）
     if [ "$dir_path" = "." ]; then
         log "跳过根目录文件: $(basename "$src_file")"
@@ -307,6 +313,12 @@ done
 IFS=',' read -ra REMOVED_FILES <<< "$COMMIT_REMOVED"
 for file in "${REMOVED_FILES[@]}"; do
     if [ -n "$file" ]; then
+        # 检查文件是否为Markdown文件
+        if [[ "$file" != *.md ]]; then
+            log "跳过删除非Markdown文件: $file"
+            continue
+        fi
+        
         # 检查文件是否在子目录中
         dir_path=$(dirname "$file")
         if [ "$dir_path" = "." ]; then
