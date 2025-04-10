@@ -69,13 +69,96 @@ start_hexo() {
 BLOG_DIR="/home/hexo/blog"
 POSTS_DIR="/home/hexo/markdown"
 BLOG_POSTS_DIR="$BLOG_DIR/source/_posts"
+# 使用.gitignore作为注释文件
+IGNORED_FILE="$POSTS_DIR/.gitignore"
+
+# 创建.gitignore文件（如果不存在）
+if [ ! -f "$IGNORED_FILE" ]; then
+    touch "$IGNORED_FILE"
+fi
+
+# 检查路径是否被注释的函数
+is_path_ignored() {
+    local check_path="$1"
+    
+    # 使用git check-ignore命令检查路径是否被忽略
+    if git -C "$POSTS_DIR" check-ignore -q "$check_path"; then
+        return 0  # 路径被忽略
+    fi
+    
+    # 遍历.gitignore中的每一行进行手动检查（备用方法）
+    while IFS= read -r pattern; do
+        # 跳过空行和注释行
+        [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+        
+        # 检查是否是通配符模式
+        if [[ "$pattern" == *"*"* ]]; then
+            # 将gitignore通配符转换为bash通配符
+            local bash_pattern=$(echo "$pattern" | sed 's|/\*$|/*|g')
+            
+            # 检查路径是否匹配通配符
+            if [[ "$check_path" == $bash_pattern ]]; then
+                return 0  # 路径被忽略
+            fi
+        # 检查是否是目录模式
+        elif [[ "$pattern" == */ ]]; then
+            local dir_pattern="${pattern%/}"
+            if [[ "$check_path" == "$dir_pattern"* ]]; then
+                return 0  # 路径被忽略
+            fi
+        # 检查是否是普通模式
+        elif [[ "$check_path" == "$pattern" || "$check_path" == *"/$pattern" ]]; then
+            return 0  # 路径被忽略
+        fi
+    done < "$IGNORED_FILE"
+    
+    return 1  # 路径未被忽略
+}
+
+# 检查文件是否应该被忽略（基于文件路径和内容类型）
+should_ignore_file() {
+    local file_path="$1"
+    local rel_path="${file_path#$POSTS_DIR/}"
+    
+    # 检查文件本身是否被忽略
+    if is_path_ignored "$rel_path"; then
+        return 0  # 文件被忽略
+    fi
+    
+    # 检查文件所在目录是否被忽略
+    local dir_path=$(dirname "$rel_path")
+    if [ "$dir_path" != "." ] && is_path_ignored "$dir_path"; then
+        return 0  # 文件所在目录被忽略
+    fi
+    
+    # 检查文件扩展名是否被忽略
+    local ext="${rel_path##*.}"
+    if is_path_ignored "*.$ext"; then
+        return 0  # 文件扩展名被忽略
+    fi
+    
+    return 1  # 文件未被忽略
+}
 
 # 处理单个文件的函数
 process_file() {
     local src_file="$1"
     local rel_path="${src_file#$POSTS_DIR/}"  # 获取相对路径
-    local filename=$(basename "$src_file")
     local dir_path=$(dirname "$rel_path")
+    
+    # 检查文件是否在根目录（非子目录中）
+    if [ "$dir_path" = "." ]; then
+        log "跳过根目录文件: $(basename "$src_file")"
+        return 0
+    fi
+    
+    # 检查文件是否应该被忽略
+    if should_ignore_file "$src_file"; then
+        log "跳过被忽略的文件: $rel_path"
+        return 0
+    fi
+    
+    local filename=$(basename "$src_file")
     local dest_file="$BLOG_POSTS_DIR/$(basename "$src_file")"
     
     # 获取分类（目录路径）
@@ -141,7 +224,29 @@ process_file() {
     mv "$temp_file" "$src_file"
     cp "$src_file" "$dest_file"
     
-    log "处理文件: $filename"
+    log "处理文件: $filename (目录: $dir_path)"
+}
+
+# 注释/取消注释路径函数
+toggle_path_ignore() {
+    local path="$1"
+    local action="$2"  # "add" 或 "remove"
+    
+    if [ "$action" = "add" ]; then
+        # 检查路径是否已经在.gitignore中
+        if grep -q "^$path$" "$IGNORED_FILE"; then
+            log "路径 '$path' 已经在忽略列表中"
+        else
+            echo "$path" >> "$IGNORED_FILE"
+            log "路径 '$path' 已添加到忽略列表"
+        fi
+    elif [ "$action" = "remove" ]; then
+        # 从.gitignore中移除路径
+        sed -i "/^$path$/d" "$IGNORED_FILE"
+        log "路径 '$path' 已从忽略列表中移除"
+    fi
+    
+    return 0
 }
 
 # 输出提交信息
@@ -152,6 +257,21 @@ log "提交时间: $COMMIT_TIMESTAMP"
 log "新增文件: $COMMIT_ADDED"
 log "删除文件: $COMMIT_REMOVED"
 log "修改文件: $COMMIT_MODIFIED"
+
+# 检查提交信息是否包含注释/取消注释命令
+if [[ "$COMMIT_MESSAGE" == *"[ignore:"* ]]; then
+    path_to_ignore=$(echo "$COMMIT_MESSAGE" | grep -o '\[ignore:[^]]*\]' | sed 's/\[ignore://;s/\]//')
+    if [ -n "$path_to_ignore" ]; then
+        toggle_path_ignore "$path_to_ignore" "add"
+    fi
+fi
+
+if [[ "$COMMIT_MESSAGE" == *"[unignore:"* ]]; then
+    path_to_unignore=$(echo "$COMMIT_MESSAGE" | grep -o '\[unignore:[^]]*\]' | sed 's/\[unignore://;s/\]//')
+    if [ -n "$path_to_unignore" ]; then
+        toggle_path_ignore "$path_to_unignore" "remove"
+    fi
+fi
 
 # 更新文章仓库
 cd "$POSTS_DIR" || exit 1
@@ -187,6 +307,19 @@ done
 IFS=',' read -ra REMOVED_FILES <<< "$COMMIT_REMOVED"
 for file in "${REMOVED_FILES[@]}"; do
     if [ -n "$file" ]; then
+        # 检查文件是否在子目录中
+        dir_path=$(dirname "$file")
+        if [ "$dir_path" = "." ]; then
+            log "跳过删除根目录文件: $(basename "$file")"
+            continue
+        fi
+        
+        # 检查文件是否应该被忽略
+        if should_ignore_file "$POSTS_DIR/$file"; then
+            log "跳过删除被忽略的文件: $file"
+            continue
+        fi
+        
         rm -f "$BLOG_POSTS_DIR/$(basename "$file")"
         log "删除文件: $(basename "$file")"
     fi
@@ -212,7 +345,7 @@ log "生成静态文件..."
 hexo generate
 
 # 拷贝百度SEO文件
-cp /home/hexo/blog/baidu_verify_codeva-XnTSBrrkqX.html /home/hexo/blog/public
+cp /home/hexo/blog/baidu_verify_codeva-Xj2KiKq7pj.html /home/hexo/blog/public
 
 # 检查生成是否成功
 if [ $? -ne 0 ]; then
