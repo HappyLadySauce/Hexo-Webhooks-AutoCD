@@ -1,11 +1,3 @@
-# 二进制文件
-hexo-webhooks-autocd
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
 # 测试文件
 *.test
 *.tmp

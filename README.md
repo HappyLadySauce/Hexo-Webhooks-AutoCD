@@ -137,6 +137,50 @@ sudo systemctl status hexo-autocd.service
 ```shell
 #!/bin/bash
 
+#======================================================
+# 配置部分 - 可根据需要调整下面的配置项
+#======================================================
+
+#---------- 工作目录设置 ----------#
+# 博客主目录
+BLOG_DIR="/home/hexo/blog"
+# Markdown文章源文件目录
+POSTS_DIR="/home/hexo/markdown"
+# 博客文章目标目录
+BLOG_POSTS_DIR="$BLOG_DIR/source/_posts"
+
+#---------- Git配置 ----------#
+# Git用户名
+GIT_USER_NAME="HappyLadySauce"
+# Git邮箱
+GIT_USER_EMAIL="13452552349@163.com"
+
+#---------- 忽略文件设置 ----------#
+# 使用.gitignore作为注释文件
+IGNORED_FILE="$POSTS_DIR/.gitignore"
+
+#---------- 随机封面设置 ----------#
+# 封面图片基础URL
+COVER_BASE_URL="https://lsky.happyladysauce.cn/i/1/"
+# 封面图片最大随机索引（0-9）
+COVER_MAX_INDEX=9
+
+#---------- 服务控制设置 ----------#
+# Hexo服务名称
+HEXO_SERVICE_NAME="hexo"
+# 服务启动/停止超时时间（秒）
+SERVICE_TIMEOUT=10
+# 服务停止后的等待时间（秒）
+SERVICE_WAIT_TIME=3
+
+#---------- 百度SEO文件 ----------#
+# 百度验证文件
+BAIDU_VERIFY_FILE="baidu_verify_codeva-Xj2KiKq7pj.html"
+
+#======================================================
+# 函数定义
+#======================================================
+
 # 日志函数
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
@@ -147,25 +191,25 @@ setup_git() {
     log "配置Git环境..."
     # 配置Git安全目录
     git config --global --add safe.directory "$POSTS_DIR"
-    # 配置Git用户信息（如果需要）
-    git config --global user.name "HappyLadySauce"
-    git config --global user.email "13452552349@163.com"
+    # 配置Git用户信息
+    git config --global user.name "$GIT_USER_NAME"
+    git config --global user.email "$GIT_USER_EMAIL"
 }
 
 # 停止hexo进程的函数
 stop_hexo() {
     log "正在停止hexo服务..."
-    if systemctl is-active hexo >/dev/null 2>&1; then
-        if ! sudo systemctl stop hexo; then
+    if systemctl is-active $HEXO_SERVICE_NAME >/dev/null 2>&1; then
+        if ! sudo systemctl stop $HEXO_SERVICE_NAME; then
             log "警告：停止hexo服务失败"
             return 1
         fi
         # 等待服务完全停止
         local count=0
-        while systemctl is-active hexo >/dev/null 2>&1; do
+        while systemctl is-active $HEXO_SERVICE_NAME >/dev/null 2>&1; do
             sleep 1
             count=$((count + 1))
-            if [ $count -ge 10 ]; then
+            if [ $count -ge $SERVICE_TIMEOUT ]; then
                 log "错误：hexo服务停止超时"
                 return 1
             fi
@@ -174,25 +218,25 @@ stop_hexo() {
     else
         log "hexo服务未运行"
     fi
-    # 等待3秒
-    sleep 3
+    # 等待指定秒数
+    sleep $SERVICE_WAIT_TIME
     return 0
 }
 
 # 启动hexo服务的函数
 start_hexo() {
     log "正在启动hexo服务..."
-    if ! sudo systemctl start hexo; then
+    if ! sudo systemctl start $HEXO_SERVICE_NAME; then
         log "错误：启动hexo服务失败"
         return 1
     fi
     
     # 等待服务启动并检查状态
     local count=0
-    while ! systemctl is-active hexo >/dev/null 2>&1; do
+    while ! systemctl is-active $HEXO_SERVICE_NAME >/dev/null 2>&1; do
         sleep 1
         count=$((count + 1))
-        if [ $count -ge 10 ]; then
+        if [ $count -ge $SERVICE_TIMEOUT ]; then
             log "错误：hexo服务启动超时"
             return 1
         fi
@@ -201,18 +245,6 @@ start_hexo() {
     log "hexo服务已成功启动"
     return 0
 }
-
-# 工作目录
-BLOG_DIR="/home/hexo/blog"
-POSTS_DIR="/home/hexo/markdown"
-BLOG_POSTS_DIR="$BLOG_DIR/source/_posts"
-# 使用.gitignore作为注释文件
-IGNORED_FILE="$POSTS_DIR/.gitignore"
-
-# 创建.gitignore文件（如果不存在）
-if [ ! -f "$IGNORED_FILE" ]; then
-    touch "$IGNORED_FILE"
-fi
 
 # 检查路径是否被注释的函数
 is_path_ignored() {
@@ -321,8 +353,7 @@ process_file() {
     fi
     
     # 生成随机封面URL
-    cover_base_url="https://lsky.happyladysauce.cn/i/1/"
-    cover_url="$cover_base_url$(($RANDOM % 9)).webp"
+    cover_url="$COVER_BASE_URL$(($RANDOM % $COVER_MAX_INDEX)).webp"
 
     # 创建临时文件
     local temp_file=$(mktemp)
@@ -391,6 +422,15 @@ toggle_path_ignore() {
     
     return 0
 }
+
+#======================================================
+# 主执行流程
+#======================================================
+
+# 创建.gitignore文件（如果不存在）
+if [ ! -f "$IGNORED_FILE" ]; then
+    touch "$IGNORED_FILE"
+fi
 
 # 输出提交信息
 log "收到新的提交："
@@ -494,7 +534,7 @@ log "生成静态文件..."
 hexo generate
 
 # 拷贝百度SEO文件
-cp /home/hexo/blog/baidu_verify_codeva-Xj2KiKq7pj.html /home/hexo/blog/public
+cp "$BLOG_DIR/$BAIDU_VERIFY_FILE" "$BLOG_DIR/public"
 
 # 检查生成是否成功
 if [ $? -ne 0 ]; then
@@ -513,8 +553,6 @@ hexo d
 
 log "部署完成！"
 exit 0
-
-
 ```
 
 ## GitHub Webhook配置
