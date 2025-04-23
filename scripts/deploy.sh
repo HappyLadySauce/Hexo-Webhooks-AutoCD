@@ -207,12 +207,18 @@ process_file() {
     
     # 获取标签（从文件名中提取）
     local tags=""
+    local has_encryption=false
     if [[ "$filename" == *"_"* ]]; then
         # 提取_后面的部分（不包括.md）
         local tag_part="${filename#*_}"
         tag_part="${tag_part%.md}"
         # 将_分隔的标签转换为yaml格式
         tags=$(echo "$tag_part" | tr '_' '\n' | sed 's/^/- /')
+        
+        # 检查是否包含加密标签
+        if [[ "$tag_part" == *"加密"* ]]; then
+            has_encryption=true
+        fi
     fi
     
     # 生成随机封面URL
@@ -237,6 +243,14 @@ process_file() {
         fi
         echo "cover: $cover_url"
         echo "ai: true"
+        # 如果包含加密标签，添加密码
+        if [ "$has_encryption" = true ]; then
+            echo "password: ChinaSkills@"
+            echo "abstract: 这里有东西被加密了，需要输入密码查看哦。"
+            echo "message: 您好，这里需要密码。"
+            echo "wrong_pass_message: 抱歉，这个密码看着不太对，请再试试。"
+            echo "wrong_hash_message: 抱歉，这个文章不能被纠正，不过您还是能看看解密后的内容。"
+        fi
         echo "---"
         echo ""  # 添加空行
     } > "$temp_file"
